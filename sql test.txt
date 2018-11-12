@@ -1,0 +1,154 @@
+
+#CREATE TEMPORARY TABLE if not exists tvl_report_request_campaign_tem
+CREATE TABLE if not exists tvl_report_request_campaign_tem
+	(`timestamp` int(11) NOT NULL DEFAULT '0' COMMENT 't1和t2之间时差是30分钟',
+	`project_id` int(11) NOT NULL DEFAULT '0' COMMENT '项目id,ref tvl_sys_project.id',
+	`campaign_id` int(11) NOT NULL DEFAULT '0' COMMENT '活动id,ref tvl_sys_project.id',
+	`material_id` int(11) NOT NULL DEFAULT '0' COMMENT '素材ID',
+	`bids` int(11) NOT NULL DEFAULT '0' COMMENT '竞价数',
+	`wins` int(11) NOT NULL DEFAULT '0' COMMENT '竞价成功数'
+	) ENGINE=MEMORY ;   
+	truncate table tvl_report_request_campaign_tem;
+	
+	#CREATE TEMPORARY TABLE if not exists tvl_report_tracker_campaign_tem
+  CREATE TABLE if not exists tvl_report_tracker_campaign_tem
+	(`timestamp` int(11) NOT NULL DEFAULT '0' COMMENT 't1和t2之间时差是30分钟',
+	`project_id` int(11) NOT NULL DEFAULT '0' COMMENT '项目id,ref tvl_sys_project.id',
+	`campaign_id` int(11) NOT NULL DEFAULT '0' COMMENT '活动id,ref tvl_sys_project.id',
+	`material_id` int(11) NOT NULL DEFAULT '0' COMMENT '素材ID',
+	`imps` int(11) NOT NULL DEFAULT '0' COMMENT '展示数',
+	`clks` int(11) NOT NULL DEFAULT '0' COMMENT '点击数',
+	`vimps` int(11) NOT NULL DEFAULT '0' COMMENT 'valid有效展示数',
+	`vclks` int(11) NOT NULL DEFAULT '0' COMMENT '有效点击数',
+	`cost` int(11) NOT NULL DEFAULT '0' COMMENT '媒体收入单位美元'
+	) ENGINE=MEMORY ;   
+	truncate table tvl_report_tracker_campaign_tem;
+	
+	
+	#CREATE TEMPORARY TABLE if not exists tvl_report_request_media_tem
+  CREATE TABLE if not exists tvl_report_request_media_tem
+	(`timestamp` int(11) NOT NULL DEFAULT '0' COMMENT 't1和t2之间时差是30分钟',
+	`media_id` int(11) NOT NULL DEFAULT '0' COMMENT '媒体id,ref tvl_sys_media.id',
+	`adspace_id` int(11) NOT NULL DEFAULT '0' COMMENT '广告位id,ref tvl_sys_adspace.id',
+	`reqs` int(11) NOT NULL DEFAULT '0' COMMENT '请求量',
+	`errs` int(11) NOT NULL DEFAULT '0' COMMENT '错误数',
+	`bids` int(11) NOT NULL DEFAULT '0' COMMENT '竞价数',
+	`wins` int(11) NOT NULL DEFAULT '0' COMMENT '竞价成功数'
+	) ENGINE=MEMORY ;   
+	truncate table tvl_report_request_media_tem;
+	
+	#CREATE TEMPORARY TABLE if not exists tvl_report_tracker_media_tem
+	CREATE TABLE if not exists tvl_report_tracker_media_tem
+	(`timestamp` int(11) NOT NULL DEFAULT '0' COMMENT 't1和t2之间时差是30分钟',
+	`media_id` int(11) NOT NULL DEFAULT '0' COMMENT '媒体id,ref tvl_sys_media.id',
+	`adspace_id` int(11) NOT NULL DEFAULT '0' COMMENT '广告位id,ref tvl_sys_adspace.id',
+	`imps` int(11) NOT NULL DEFAULT '0' COMMENT '展示数',
+	`clks` int(11) NOT NULL DEFAULT '0' COMMENT '点击数',
+	`vimps` int(11) NOT NULL DEFAULT '0' COMMENT 'valid有效展示数',
+	`vclks` int(11) NOT NULL DEFAULT '0' COMMENT '有效点击数',
+	`income` int(11) NOT NULL DEFAULT '0' COMMENT '媒体收入单位美元'
+	) ENGINE=MEMORY ;   
+	truncate table tvl_report_tracker_media_tem;
+
+insert into `tvl_report_request_campaign_tem` (`timestamp`, `project_id`, `campaign_id`, `material_id`, `bids`, `wins`)
+	SELECT `timestamp`, project_id, campaign_id, material_id, SUM(bids) AS bids, SUM(wins) AS wins
+	FROM tvl_report_request_mem
+	#WHERE create_timestamp <= @request_time
+	GROUP BY timestamp, project_id, campaign_id, material_id;
+	
+	insert into `tvl_report_tracker_campaign_tem` (`timestamp`, `project_id`, `campaign_id`, `material_id`, `imps`, `clks`, `vimps`, `vclks`, `cost`)
+	SELECT timestamp, project_id, campaign_id, material_id, SUM(imps) AS imps, SUM(clks) AS clks, SUM(vimps) AS vimps, SUM(vclks) AS vclks, SUM(cost) AS cost
+	FROM tvl_report_tracker_mem
+	#WHERE create_timestamp <= @tracker_time
+	GROUP BY timestamp, project_id, campaign_id, material_id;
+	
+	insert into `tvl_report_request_media_tem` (`timestamp`, `media_id`, `adspace_id`, `reqs`, `errs`, `bids`, `wins`)
+	SELECT `timestamp`, media_id, adspace_id, SUM(reqs) AS reqs, SUM(errs) AS errs, SUM(bids) AS bids, SUM(wins) AS wins
+	FROM tvl_report_request_mem
+	#WHERE create_timestamp <= @request_time
+	GROUP BY `timestamp`, media_id, adspace_id;
+ 
+  insert into `tvl_report_tracker_media_tem` (`timestamp`, `media_id`, `adspace_id`, `imps`, `clks`, `vimps`, `vclks`, `income`)
+	SELECT timestamp, media_id, adspace_id, SUM(imps) AS imps, SUM(clks) AS clks, SUM(vimps) AS vimps, SUM(vclks) AS vclks, SUM(income) AS income
+	FROM tvl_report_tracker_mem
+	#WHERE create_timestamp <= @tracker_time
+	GROUP BY `timestamp`, media_id, adspace_id;
+
+select `timestamp`, `project_id`, `campaign_id`, `material_id`, `bids`, `wins`, `imps`, `clks`, `vimps`, `vclks`, `cost`, `create_timestamp`
+from (
+		SELECT coalesce(a.`timestamp`, b.`timestamp`) AS `timestamp`
+			, coalesce(a.project_id, b.project_id) AS `project_id`
+			, coalesce(a.campaign_id, b.campaign_id) AS `campaign_id`
+			, coalesce(a.material_id, b.material_id) AS `material_id`
+			, coalesce(a.bids, 0) AS bids
+			, coalesce(a.wins, 0) AS wins
+			, coalesce(b.imps, 0) AS imps
+			, coalesce(b.clks, 0) AS clks
+			, coalesce(b.vimps, 0) AS vimps
+			, coalesce(b.vclks, 0) AS vclks
+			, coalesce(b.cost, 0) AS cost, unix_timestamp() AS create_timestamp
+		FROM tvl_report_request_campaign_tem a
+			left JOIN tvl_report_tracker_campaign_tem b
+			ON a.`timestamp` = b.`timestamp`
+				AND a.project_id = b.project_id
+				AND a.campaign_id = b.campaign_id
+				AND a.material_id = b.material_id
+		union all
+		SELECT coalesce(a.`timestamp`, b.`timestamp`) AS `timestamp`
+			, coalesce(a.project_id, b.project_id) AS `project_id`
+			, coalesce(a.campaign_id, b.campaign_id) AS `campaign_id`
+			, coalesce(a.material_id, b.material_id) AS `material_id`
+			, coalesce(a.bids, 0) AS bids
+			, coalesce(a.wins, 0) AS wins
+			, coalesce(b.imps, 0) AS imps
+			, coalesce(b.clks, 0) AS clks
+			, coalesce(b.vimps, 0) AS vimps
+			, coalesce(b.vclks, 0) AS vclks
+			, coalesce(b.cost, 0) AS cost, unix_timestamp() AS create_timestamp
+		FROM tvl_report_request_campaign_tem a
+			right JOIN tvl_report_tracker_campaign_tem b
+			ON a.`timestamp` = b.`timestamp`
+				AND a.project_id = b.project_id
+				AND a.campaign_id = b.campaign_id
+				AND a.material_id = b.material_id) u
+
+
+SELECT `timestamp`, `media_id`, `adspace_id`, `reqs`, `errs`, `bids`, `wins`, `imps`, `clks`, `vimps`, `vclks`, `income`, `create_timestamp`
+		FROM (
+			SELECT coalesce(a.`timestamp`, b.`timestamp`) AS `timestamp`
+				, coalesce(a.media_id, b.media_id) AS `media_id`
+				, coalesce(a.adspace_id, b.adspace_id) AS `adspace_id`
+				, coalesce(a.reqs, 0) AS reqs
+				, coalesce(a.errs, 0) AS errs
+				, coalesce(a.bids, 0) AS bids
+				, coalesce(a.wins, 0) AS wins
+				, coalesce(b.imps, 0) AS imps
+				, coalesce(b.clks, 0) AS clks
+				, coalesce(b.vimps, 0) AS vimps
+				, coalesce(b.vclks, 0) AS vclks
+				, coalesce(b.income, 0) AS income, unix_timestamp() AS create_timestamp
+			FROM tvl_report_request_media_tem a
+				left JOIN tvl_report_tracker_media_tem b
+				ON a.`timestamp` = b.`timestamp`
+					AND a.media_id = b.media_id
+					AND a.adspace_id = b.adspace_id
+			UNION ALL
+			SELECT coalesce(a.`timestamp`, b.`timestamp`) AS `timestamp`
+				, coalesce(a.media_id, b.media_id) AS `media_id`
+				, coalesce(a.adspace_id, b.adspace_id) AS `adspace_id`
+				, coalesce(a.reqs, 0) AS reqs
+				, coalesce(a.errs, 0) AS errs
+				, coalesce(a.bids, 0) AS bids
+				, coalesce(a.wins, 0) AS wins
+				, coalesce(b.imps, 0) AS imps
+				, coalesce(b.clks, 0) AS clks
+				, coalesce(b.vimps, 0) AS vimps
+				, coalesce(b.vclks, 0) AS vclks
+				, coalesce(b.income, 0) AS income, unix_timestamp() AS create_timestamp
+			FROM tvl_report_request_media_tem a
+				RIGHT JOIN tvl_report_tracker_media_tem b
+				ON a.`timestamp` = b.`timestamp`
+					AND a.media_id = b.media_id
+					AND a.adspace_id = b.adspace_id
+		) u
+
